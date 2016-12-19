@@ -60,7 +60,7 @@
                 "auto_minor_version_upgrade": true,
                 "copy_tags_to_snapshot":true,
                 "skip_final_snapshot": false,
-                "db_subnet_group": (( grab meta.db_subnet_group )),
+                "db_subnet_group_name": (( grab meta.db_subnet_group )),
                 "vpc_security_group_ids": (( grab meta.db_security_groups ))
               }
             }
