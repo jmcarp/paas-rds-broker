@@ -1,0 +1,222 @@
+---
+jobs:
+- name: push-rds-broker-staging
+  serial: true
+  plan:
+  - aggregate:
+    - get: broker-src
+      trigger: true
+    - get: broker-config
+      trigger: true
+    - get: pipeline-tasks
+  - task: build
+    file: broker-config/tasks/build.yml
+    params:
+      AUTH_USERNAME: {{staging-auth-name}}
+      AUTH_PASSWORD: {{staging-auth-pass}}
+      AWS_REGION: {{staging-aws-region}}
+      DB_PREFIX: cg-aws-broker
+      AWS_PARTITION: aws-us-gov
+      BROKER_NAME: {{staging-broker-name}}
+      MASTER_PASSWORD_SEED: {{staging-master-password-seed}}
+      STATE_ENCRYPTION_KEY: {{staging-state-encryption-key}}
+      DB_SUBNET_GROUP: {{staging-db-subnet-group}}
+      DB_SECURITY_GROUP: {{staging-db-security-group}}
+  - put: deploy-rds-broker-app-staging
+    params:
+      path: broker-src-built
+      manifest: broker-src-built/manifest.yml
+      current_app_name: rds-broker
+      environment_variables:
+        AWS_ACCESS_KEY_ID: {{staging-aws-access-key-id}}
+        AWS_SECRET_ACCESS_KEY: {{staging-aws-secret-access-key}}
+        AWS_REGION: {{staging-aws-region}}
+  # - task: update-broker
+  #   file: pipeline-tasks/register-service-broker.yml
+  #   params:
+  #     <<: *staging-cf-creds
+  #     BROKER_NAME: rds-broker
+  #     AUTH_USER: {{staging-auth-name}}
+  #     AUTH_PASS: {{staging-auth-pass}}
+  #     SERVICES: aws-rds
+  on_failure:
+    put: slack
+    params:
+      text: |
+        :x: FAILED to deploy rds-broker on staging
+        <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|View build details>
+      channel: {{slack-channel}}
+      username: {{slack-username}}
+      icon_url: {{slack-icon-url}}
+  on_success:
+    put: slack
+    params:
+      text: |
+        :white_check_mark: Successfully deployed rds-broker on staging
+        <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|View build details>
+      channel: {{slack-channel}}
+      username: {{slack-username}}
+      icon_url: {{slack-icon-url}}
+
+# - name: acceptance-tests-staging
+#   serial: true
+#   plan:
+#   - aggregate:
+#     - get: broker-src
+#       passed: [push-rds-broker-staging]
+#       trigger: true
+#     - get: broker-config
+#       passed: [push-rds-broker-staging]
+#       trigger: true
+#   - task: acceptance-tests
+#     file: broker-config/tasks/acceptance-tests.yml
+#     params:
+#       <<: *staging-cf-creds
+#       APP_NAME: rds-acceptance-test
+#       SERVICE_NAME: aws-rds
+#       PLAN_NAME: default
+#       SERVICE_INSTANCE_NAME: rds-acceptance-test
+
+- name: push-rds-broker-production
+  serial: true
+  plan:
+  - aggregate:
+    - get: broker-src
+      # passed: [acceptance-tests-staging]
+      trigger: true
+    - get: broker-config
+      # passed: [acceptance-tests-staging]
+      trigger: true
+    - get: pipeline-tasks
+  - task: build
+    file: broker-config/tasks/build.yml
+    params:
+      AUTH_USERNAME: {{production-auth-name}}
+      AUTH_PASSWORD: {{production-auth-pass}}
+      AWS_REGION: {{production-aws-region}}
+      DB_PREFIX: cg-aws-broker
+      AWS_PARTITION: aws-us-gov
+      AWS_PARTITION: aws-us-gov
+      BROKER_NAME: {{production-broker-name}}
+      MASTER_PASSWORD_SEED: {{production-master-password-seed}}
+      STATE_ENCRYPTION_KEY: {{production-state-encryption-key}}
+      DB_SUBNET_GROUP: {{production-db-subnet-group}}
+      DB_SECURITY_GROUP: {{production-db-security-group}}
+  - put: deploy-rds-broker-app-production
+    params:
+      path: broker-src-built
+      manifest: broker-src-built/manifest.yml
+      current_app_name: rds-broker
+      environment_variables:
+        AWS_ACCESS_KEY_ID: {{production-aws-access-key-id}}
+        AWS_SECRET_ACCESS_KEY: {{production-aws-secret-access-key}}
+        AWS_REGION: {{production-aws-region}}
+  # - task: update-broker
+  #   file: pipeline-tasks/register-service-broker.yml
+  #   params:
+  #     <<: *production-cf-creds
+  #     BROKER_NAME: rds-broker
+  #     AUTH_USER: {{production-auth-name}}
+  #     AUTH_PASS: {{production-auth-pass}}
+  #     SERVICES: aws-rds
+  on_failure:
+    put: slack
+    params:
+      text: |
+        :x: FAILED to deploy rds-broker on production
+        <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|View build details>
+      channel: {{slack-channel}}
+      username: {{slack-username}}
+      icon_url: {{slack-icon-url}}
+  on_success:
+    put: slack
+    params:
+      text: |
+        :white_check_mark: Successfully deployed rds-broker on production
+        <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|View build details>
+      channel: {{slack-channel}}
+      username: {{slack-username}}
+      icon_url: {{slack-icon-url}}
+
+# - name: acceptance-tests-production
+#   serial: true
+#   plan:
+#   - aggregate:
+#     - get: broker-src
+#       passed: [push-rds-broker-production]
+#       trigger: true
+#     - get: broker-config
+#       passed: [push-rds-broker-production]
+#       trigger: true
+#   - task: smoke-tests-rds
+#     file: broker-config/tasks/acceptance-tests.yml
+#     params:
+#       <<: *production-cf-creds
+#       APP_NAME: rds-acceptance-test
+#       SERVICE_NAME: aws-rds
+#       PLAN_NAME: default
+#       SERVICE_INSTANCE_NAME: rds-acceptance-test
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+
+resources:
+- name: broker-src
+  type: git
+  source:
+    uri: {{rds-broker-app-url}}
+    branch: {{rds-broker-app-branch}}
+
+- name: broker-config
+  type: git
+  source:
+    uri: {{rds-broker-config-url}}
+    branch: {{rds-broker-config-branch}}
+
+- name: pipeline-tasks
+  type: git
+  source:
+    uri: {{pipeline-tasks-git-url}}
+    branch: {{pipeline-tasks-git-branch}}
+
+- name: deploy-rds-broker-app-staging
+  type: cf
+  source:
+    api: {{staging-cf-api-url}}
+    username: {{staging-cf-username}}
+    password: {{staging-cf-password}}
+    organization: {{staging-cf-organization}}
+    space: {{staging-cf-space}}
+    skip_cert_check: false
+
+- name: deploy-rds-broker-app-production
+  type: cf
+  source:
+    api: {{production-cf-api-url}}
+    username: {{production-cf-username}}
+    password: {{production-cf-password}}
+    organization: {{production-cf-organization}}
+    space: {{production-cf-space}}
+    skip_cert_check: false
+
+- name: slack
+  type: slack-notification
+  source:
+    url: {{slack-webhook-url}}
+
+staging-cf-creds: &staging-cf-creds
+  CF_API_URL: {{staging-cf-api-url}}
+  CF_USERNAME: {{staging-cf-username}}
+  CF_PASSWORD: {{staging-cf-password}}
+  CF_ORGANIZATION: {{staging-cf-organization}}
+  CF_SPACE: {{staging-cf-space}}
+
+production-cf-creds: &production-cf-creds
+  CF_API_URL: {{production-cf-api-url}}
+  CF_USERNAME: {{production-cf-username}}
+  CF_PASSWORD: {{production-cf-password}}
+  CF_ORGANIZATION: {{production-cf-organization}}
+  CF_SPACE: {{production-cf-space}}

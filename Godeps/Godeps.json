@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/alphagov/paas-rds-broker",
-	"GoVersion": "go1.5.1",
+	"GoVersion": "go1.5.3",
 	"GodepVersion": "v73",
 	"Packages": [
 		"./..."
