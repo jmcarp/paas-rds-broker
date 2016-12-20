@@ -15,7 +15,8 @@ rds_config:
   db_prefix: "${DB_PREFIX}"
 meta:
   db_subnet_group: "${DB_SUBNET_GROUP}"
-  db_security_groups: ["${DB_SECURITY_GROUP}"]
+  mysql_db_security_groups: ["${MYSQL_DB_SECURITY_GROUP}"]
+  postgres_db_security_groups: ["${POSTGRES_DB_SECURITY_GROUP}"]
 EOF
 
 cp -r broker-src/. broker-src-built

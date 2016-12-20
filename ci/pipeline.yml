@@ -21,7 +21,8 @@ jobs:
       MASTER_PASSWORD_SEED: {{staging-master-password-seed}}
       STATE_ENCRYPTION_KEY: {{staging-state-encryption-key}}
       DB_SUBNET_GROUP: {{staging-db-subnet-group}}
-      DB_SECURITY_GROUP: {{staging-db-security-group}}
+      MYSQL_DB_SECURITY_GROUP: {{staging-mysql-db-security-group}}
+      POSTGRES_DB_SECURITY_GROUP: {{staging-postgres-db-security-group}}
   - put: deploy-rds-broker-app-staging
     params:
       path: broker-src-built
@@ -101,7 +102,8 @@ jobs:
       MASTER_PASSWORD_SEED: {{production-master-password-seed}}
       STATE_ENCRYPTION_KEY: {{production-state-encryption-key}}
       DB_SUBNET_GROUP: {{production-db-subnet-group}}
-      DB_SECURITY_GROUP: {{production-db-security-group}}
+      MYSQL_DB_SECURITY_GROUP: {{production-mysql-db-security-group}}
+      POSTGRES_DB_SECURITY_GROUP: {{production-postgres-db-security-group}}
   - put: deploy-rds-broker-app-production
     params:
       path: broker-src-built
