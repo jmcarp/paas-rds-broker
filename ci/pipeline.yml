@@ -32,14 +32,14 @@ jobs:
         AWS_ACCESS_KEY_ID: {{staging-aws-access-key-id}}
         AWS_SECRET_ACCESS_KEY: {{staging-aws-secret-access-key}}
         AWS_REGION: {{staging-aws-region}}
-  # - task: update-broker
-  #   file: pipeline-tasks/register-service-broker.yml
-  #   params:
-  #     <<: *staging-cf-creds
-  #     BROKER_NAME: rds-broker
-  #     AUTH_USER: {{staging-auth-name}}
-  #     AUTH_PASS: {{staging-auth-pass}}
-  #     SERVICES: aws-rds
+  - task: update-broker
+    file: pipeline-tasks/register-service-broker.yml
+    params:
+      <<: *staging-cf-creds
+      BROKER_NAME: rds-broker
+      AUTH_USER: {{staging-auth-name}}
+      AUTH_PASS: {{staging-auth-pass}}
+      SERVICES: rdsmysql rdspostgres
   on_failure:
     put: slack
     params:
@@ -59,34 +59,45 @@ jobs:
       username: {{slack-username}}
       icon_url: {{slack-icon-url}}
 
-# - name: acceptance-tests-staging
-#   serial: true
-#   plan:
-#   - aggregate:
-#     - get: broker-src
-#       passed: [push-rds-broker-staging]
-#       trigger: true
-#     - get: broker-config
-#       passed: [push-rds-broker-staging]
-#       trigger: true
-#   - task: acceptance-tests
-#     file: broker-config/tasks/acceptance-tests.yml
-#     params:
-#       <<: *staging-cf-creds
-#       APP_NAME: rds-acceptance-test
-#       SERVICE_NAME: aws-rds
-#       PLAN_NAME: default
-#       SERVICE_INSTANCE_NAME: rds-acceptance-test
+- name: acceptance-tests-staging
+  serial: true
+  plan:
+  - aggregate:
+    - get: broker-src
+      passed: [push-rds-broker-staging]
+      trigger: true
+    - get: broker-config
+      passed: [push-rds-broker-staging]
+      trigger: true
+  - aggregate:
+    - task: acceptance-tests-postgres
+      file: broker-config/tasks/acceptance-tests.yml
+      params:
+        <<: *staging-cf-creds
+        APP_NAME: rds-acceptance-test-postgres
+        SERVICE_NAME: rdspostgres
+        PLAN_NAME: 9.3-medium
+        SERVICE_INSTANCE_NAME: rds-acceptance-test-postgres
+        URL_PATH: postgres
+    - task: acceptance-tests-mysql
+      file: broker-config/tasks/acceptance-tests.yml
+      params:
+        <<: *staging-cf-creds
+        APP_NAME: rds-acceptance-test-mysql
+        SERVICE_NAME: rdsmysql
+        PLAN_NAME: 5.5-medium
+        SERVICE_INSTANCE_NAME: rds-acceptance-test-mysql
+        URL_PATH: mysql
 
 - name: push-rds-broker-production
   serial: true
   plan:
   - aggregate:
     - get: broker-src
-      # passed: [acceptance-tests-staging]
+      passed: [acceptance-tests-staging]
       trigger: true
     - get: broker-config
-      # passed: [acceptance-tests-staging]
+      passed: [acceptance-tests-staging]
       trigger: true
     - get: pipeline-tasks
   - task: build
@@ -113,14 +124,14 @@ jobs:
         AWS_ACCESS_KEY_ID: {{production-aws-access-key-id}}
         AWS_SECRET_ACCESS_KEY: {{production-aws-secret-access-key}}
         AWS_REGION: {{production-aws-region}}
-  # - task: update-broker
-  #   file: pipeline-tasks/register-service-broker.yml
-  #   params:
-  #     <<: *production-cf-creds
-  #     BROKER_NAME: rds-broker
-  #     AUTH_USER: {{production-auth-name}}
-  #     AUTH_PASS: {{production-auth-pass}}
-  #     SERVICES: aws-rds
+  - task: update-broker
+    file: pipeline-tasks/register-service-broker.yml
+    params:
+      <<: *production-cf-creds
+      BROKER_NAME: rds-broker
+      AUTH_USER: {{production-auth-name}}
+      AUTH_PASS: {{production-auth-pass}}
+      SERVICES: rdsmysql rdspostgres
   on_failure:
     put: slack
     params:
@@ -140,24 +151,24 @@ jobs:
       username: {{slack-username}}
       icon_url: {{slack-icon-url}}
 
-# - name: acceptance-tests-production
-#   serial: true
-#   plan:
-#   - aggregate:
-#     - get: broker-src
-#       passed: [push-rds-broker-production]
-#       trigger: true
-#     - get: broker-config
-#       passed: [push-rds-broker-production]
-#       trigger: true
-#   - task: smoke-tests-rds
-#     file: broker-config/tasks/acceptance-tests.yml
-#     params:
-#       <<: *production-cf-creds
-#       APP_NAME: rds-acceptance-test
-#       SERVICE_NAME: aws-rds
-#       PLAN_NAME: default
-#       SERVICE_INSTANCE_NAME: rds-acceptance-test
+- name: acceptance-tests-production
+  serial: true
+  plan:
+  - aggregate:
+    - get: broker-src
+      passed: [push-rds-broker-production]
+      trigger: true
+    - get: broker-config
+      passed: [push-rds-broker-production]
+      trigger: true
+  - task: smoke-tests-rds
+    file: broker-config/tasks/acceptance-tests.yml
+    params:
+      <<: *production-cf-creds
+      APP_NAME: rds-acceptance-test
+      SERVICE_NAME: aws-rds
+      PLAN_NAME: default
+      SERVICE_INSTANCE_NAME: rds-acceptance-test
 
 resource_types:
 - name: slack-notification
