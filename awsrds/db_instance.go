@@ -6,6 +6,7 @@ import (
 
 type DBInstance interface {
 	Describe(ID string) (DBInstanceDetails, error)
+	DescribeMany(IDs []string) ([]DBInstanceDetails, error)
 	DescribeByTag(TagName, TagValue string) ([]*DBInstanceDetails, error)
 	Create(ID string, dbInstanceDetails DBInstanceDetails) error
 	Modify(ID string, dbInstanceDetails DBInstanceDetails, applyImmediately bool) error
@@ -46,6 +47,8 @@ type DBInstanceDetails struct {
 	StorageType                string
 	Tags                       map[string]string
 	VpcSecurityGroupIds        []string
+	ReadReplicaCount           int
+	ReadReplicaIds             []string
 }
 
 var (

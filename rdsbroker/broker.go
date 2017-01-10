@@ -140,17 +140,6 @@ func (b *RDSBroker) Update(instanceID string, details brokerapi.UpdateDetails, a
 		return false, brokerapi.ErrAsyncRequired
 	}
 
-	updateParameters := UpdateParameters{}
-	if b.allowUserUpdateParameters {
-		if err := mapstructure.Decode(details.Parameters, &updateParameters); err != nil {
-			return false, err
-		}
-		if err := updateParameters.Validate(); err != nil {
-			return false, err
-		}
-		b.logger.Debug("update-parsed-params", lager.Data{updateParametersLogKey: updateParameters})
-	}
-
 	service, ok := b.catalog.FindService(details.ServiceID)
 	if !ok {
 		return false, fmt.Errorf("Service '%s' not found", details.ServiceID)
@@ -163,6 +152,17 @@ func (b *RDSBroker) Update(instanceID string, details brokerapi.UpdateDetails, a
 	servicePlan, ok := b.catalog.FindServicePlan(details.PlanID)
 	if !ok {
 		return false, fmt.Errorf("Service Plan '%s' not found", details.PlanID)
+	}
+
+	updateParameters := UpdateParameters{}
+	if b.allowUserUpdateParameters {
+		if err := mapstructure.Decode(details.Parameters, &updateParameters); err != nil {
+			return false, err
+		}
+		if err := updateParameters.Validate(servicePlan.RDSProperties); err != nil {
+			return false, err
+		}
+		b.logger.Debug("update-parsed-params", lager.Data{updateParametersLogKey: updateParameters})
 	}
 
 	modifyDBInstance := b.modifyDBInstance(instanceID, servicePlan, updateParameters, details)
@@ -261,6 +261,14 @@ func (b *RDSBroker) Bind(instanceID, bindingID string, details brokerapi.BindDet
 	masterUsername = dbInstanceDetails.MasterUsername
 	dbName = b.dbNameFromDetails(instanceID, dbInstanceDetails)
 
+	var replicas []awsrds.DBInstanceDetails
+	if len(dbInstanceDetails.ReadReplicaIds) > 0 {
+		replicas, err = b.dbInstance.DescribeMany(dbInstanceDetails.ReadReplicaIds)
+		if err != nil {
+			return bindingResponse, err
+		}
+	}
+
 	sqlEngine, err := b.sqlProvider.GetSQLEngine(servicePlan.RDSProperties.Engine)
 	if err != nil {
 		return bindingResponse, err
@@ -276,14 +284,24 @@ func (b *RDSBroker) Bind(instanceID, bindingID string, details brokerapi.BindDet
 		return bindingResponse, err
 	}
 
+	replicaURIs := make([]string, len(replicas))
+	replicaJDBCURIs := make([]string, len(replicas))
+	for idx, replica := range replicas {
+		replicaURIs[idx] = sqlEngine.URI(replica.Address, dbPort, dbName, dbUsername, dbPassword)
+		replicaJDBCURIs[idx] = sqlEngine.JDBCURI(replica.Address, dbPort, dbName, dbUsername, dbPassword)
+	}
+
 	bindingResponse.Credentials = &brokerapi.CredentialsHash{
-		Host:     dbAddress,
-		Port:     dbPort,
-		Name:     dbName,
-		Username: dbUsername,
-		Password: dbPassword,
-		URI:      sqlEngine.URI(dbAddress, dbPort, dbName, dbUsername, dbPassword),
-		JDBCURI:  sqlEngine.JDBCURI(dbAddress, dbPort, dbName, dbUsername, dbPassword),
+		Host:            dbAddress,
+		Port:            dbPort,
+		Name:            dbName,
+		Username:        dbUsername,
+		Password:        dbPassword,
+		URI:             sqlEngine.URI(dbAddress, dbPort, dbName, dbUsername, dbPassword),
+		JDBCURI:         sqlEngine.JDBCURI(dbAddress, dbPort, dbName, dbUsername, dbPassword),
+		Replicas:        dbInstanceDetails.ReadReplicaIds,
+		ReplicaURIs:     replicaURIs,
+		ReplicaJDBCURIs: replicaJDBCURIs,
 	}
 
 	return bindingResponse, nil
