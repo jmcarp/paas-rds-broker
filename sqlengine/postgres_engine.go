@@ -7,7 +7,8 @@ import (
 	"text/template"
 
 	"github.com/lib/pq" // PostgreSQL Driver
-	"github.com/pivotal-golang/lager"
+
+	"code.cloudfoundry.org/lager"
 )
 
 var ensureGroupPattern = `
